@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZOT-DGA API Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .upload-zone {
+            border: 3px dashed #ccc;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-zone:hover, .upload-zone.drag-over {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        
+        .image-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .image-item {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .image-item img {
+            max-width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 5px;
+        }
+        
+        .image-actions {
+            margin-top: 10px;
+        }
+        
+        .image-actions button {
+            margin: 0 5px;
+            padding: 5px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .btn-delete {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        .btn-view {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .success {
+            color: #155724;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .loading {
+            color: #856404;
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .config-section {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .config-section input {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖼️ ZOT-DGA Image Library API Demo</h1>
+        <p>This demo shows how to integrate with the ZOT-DGA Image Library API using vanilla JavaScript.</p>
+        
+        <!-- Configuration Section -->
+        <div class="config-section">
+            <h3>⚙️ API Configuration</h3>
+            <input type="text" id="apiUrl" placeholder="API URL (e.g., http://localhost:3000)" value="http://localhost:3000">
+            <input type="text" id="apiKey" placeholder="Your API Key">
+            <button onclick="testConnection()">Test Connection</button>
+        </div>
+        
+        <!-- Stats Section -->
+        <div id="statsSection" style="display: none;">
+            <h3>📊 Statistics</h3>
+            <div class="stats" id="stats"></div>
+        </div>
+        
+        <!-- Upload Section -->
+        <div class="container">
+            <h3>📤 Upload Images</h3>
+            <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
+                <input type="file" id="fileInput" multiple accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
+                <p>📁 Click here or drag and drop images to upload</p>
+                <p style="color: #666; font-size: 0.9em;">Supports: JPEG, PNG, GIF, WebP</p>
+            </div>
+            
+            <div>
+                <label>Folder (optional): 
+                    <input type="text" id="folderInput" placeholder="e.g., gallery, avatars" style="width: 200px;">
+                </label>
+                <label style="margin-left: 20px;">Tags (optional): 
+                    <input type="text" id="tagsInput" placeholder="e.g., nature, portrait" style="width: 200px;">
+                </label>
+            </div>
+            
+            <div id="uploadStatus"></div>
+        </div>
+        
+        <!-- Gallery Section -->
+        <div class="container">
+            <h3>🖼️ Image Gallery</h3>
+            <button onclick="loadImages()">🔄 Refresh Gallery</button>
+            <div id="imageGallery" class="image-gallery"></div>
+        </div>
+    </div>
+
+    <script>
+        // API Configuration
+        let API_URL = 'http://localhost:3000';
+        let API_KEY = '';
+
+        // Update API configuration
+        function updateConfig() {
+            API_URL = document.getElementById('apiUrl').value || 'http://localhost:3000';
+            API_KEY = document.getElementById('apiKey').value;
+        }
+
+        // Test API connection
+        async function testConnection() {
+            updateConfig();
+            
+            if (!API_KEY) {
+                showMessage('Please enter your API key', 'error');
+                return;
+            }
+
+            try {
+                showMessage('Testing connection...', 'loading');
+                
+                const response = await fetch(`${API_URL}/api/files`, {
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`
+                    }
+                });
+
+                if (response.ok) {
+                    showMessage('✅ Connection successful!', 'success');
+                    document.getElementById('statsSection').style.display = 'block';
+                    loadStats();
+                    loadImages();
+                } else {
+                    const error = await response.json();
+                    showMessage(`❌ Connection failed: ${error.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`❌ Connection failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_URL}/api/files/stats`, {
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    displayStats(data.stats);
+                }
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        // Display statistics
+        function displayStats(stats) {
+            const statsContainer = document.getElementById('stats');
+            statsContainer.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${stats.totalFiles || 0}</div>
+                    <div class="stat-label">Total Files</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${formatFileSize(stats.totalSize || 0)}</div>
+                    <div class="stat-label">Total Size</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.imageCount || 0}</div>
+                    <div class="stat-label">Images</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${stats.videoCount || 0}</div>
+                    <div class="stat-label">Videos</div>
+                </div>
+            `;
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Handle file selection
+        function handleFileSelect(event) {
+            const files = Array.from(event.target.files);
+            uploadFiles(files);
+        }
+
+        // Handle drag and drop
+        const uploadZone = document.querySelector('.upload-zone');
+        
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('drag-over');
+        });
+        
+        uploadZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('drag-over');
+        });
+        
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('drag-over');
+            const files = Array.from(e.dataTransfer.files);
+            uploadFiles(files);
+        });
+
+        // Upload files
+        async function uploadFiles(files) {
+            updateConfig();
+            
+            if (!API_KEY) {
+                showMessage('Please configure your API key first', 'error');
+                return;
+            }
+
+            const folder = document.getElementById('folderInput').value;
+            const tags = document.getElementById('tagsInput').value;
+
+            for (const file of files) {
+                await uploadFile(file, folder, tags);
+            }
+            
+            // Refresh gallery after uploads
+            loadImages();
+            loadStats();
+        }
+
+        // Upload single file
+        async function uploadFile(file, folder, tags) {
+            const formData = new FormData();
+            formData.append('file', file);
+            if (folder) formData.append('folder', folder);
+            if (tags) formData.append('tags', tags);
+
+            try {
+                showMessage(`📤 Uploading ${file.name}...`, 'loading');
+                
+                const response = await fetch(`${API_URL}/api/upload/image`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showMessage(`✅ ${file.name} uploaded successfully!`, 'success');
+                } else {
+                    const error = await response.json();
+                    showMessage(`❌ Failed to upload ${file.name}: ${error.message || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`❌ Failed to upload ${file.name}: ${error.message}`, 'error');
+            }
+        }
+
+        // Load and display images
+        async function loadImages() {
+            updateConfig();
+            
+            if (!API_KEY) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/api/files?type=image`, {
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    displayImages(data.files);
+                } else {
+                    const error = await response.json();
+                    showMessage(`Failed to load images: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`Failed to load images: ${error.message}`, 'error');
+            }
+        }
+
+        // Display images in gallery
+        function displayImages(images) {
+            const gallery = document.getElementById('imageGallery');
+            
+            if (images.length === 0) {
+                gallery.innerHTML = '<p style="text-align: center; color: #666;">No images uploaded yet. Upload some images to get started!</p>';
+                return;
+            }
+
+            gallery.innerHTML = images.map(image => `
+                <div class="image-item">
+                    <img src="${getThumbnailUrl(image.id)}" alt="${image.original_name}" loading="lazy">
+                    <h4>${image.original_name}</h4>
+                    <p><strong>Size:</strong> ${formatFileSize(image.size)}</p>
+                    <p><strong>Uploaded:</strong> ${new Date(image.created_at).toLocaleDateString()}</p>
+                    ${image.tags ? `<p><strong>Tags:</strong> ${image.tags}</p>` : ''}
+                    <div class="image-actions">
+                        <button class="btn-view" onclick="viewImage(${image.id}, '${image.original_name}')">👁️ View</button>
+                        <button class="btn-delete" onclick="deleteImage(${image.id}, '${image.original_name}')">🗑️ Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Get thumbnail URL
+        function getThumbnailUrl(fileId) {
+            return `${API_URL}/api/process/thumbnail/${fileId}?size=300`;
+        }
+
+        // Get resized image URL
+        function getResizedImageUrl(fileId, width, height) {
+            return `${API_URL}/api/process/resize/${fileId}?width=${width}&height=${height}`;
+        }
+
+        // View image in new window
+        function viewImage(fileId, filename) {
+            const imageUrl = getResizedImageUrl(fileId, 800, 600);
+            window.open(imageUrl, '_blank');
+        }
+
+        // Delete image
+        async function deleteImage(fileId, filename) {
+            if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+                return;
+            }
+
+            try {
+                showMessage(`🗑️ Deleting ${filename}...`, 'loading');
+                
+                const response = await fetch(`${API_URL}/api/files/${fileId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`
+                    }
+                });
+
+                if (response.ok) {
+                    showMessage(`✅ ${filename} deleted successfully!`, 'success');
+                    loadImages();
+                    loadStats();
+                } else {
+                    const error = await response.json();
+                    showMessage(`❌ Failed to delete ${filename}: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`❌ Failed to delete ${filename}: ${error.message}`, 'error');
+            }
+        }
+
+        // Show status message
+        function showMessage(message, type) {
+            const uploadStatus = document.getElementById('uploadStatus');
+            uploadStatus.innerHTML = `<div class="${type}">${message}</div>`;
+            
+            // Auto-hide success and loading messages
+            if (type === 'success' || type === 'loading') {
+                setTimeout(() => {
+                    uploadStatus.innerHTML = '';
+                }, type === 'loading' ? 10000 : 3000);
+            }
+        }
+
+        // Initialize demo
+        document.addEventListener('DOMContentLoaded', function() {
+            // Pre-fill with admin API key if available
+            const adminKey = '8c70b11f-3df5-4783-ae56-c105d98dced5'; // From the seed
+            document.getElementById('apiKey').value = adminKey;
+            
+            showMessage('💡 Tip: Enter your API key and click "Test Connection" to get started!', 'loading');
+        });
+    </script>
+</body>
+</html>
